@@ -12,7 +12,7 @@ class QueryForm(forms.Form):
     model_choice = forms.ChoiceField(
         choices=[
             ('llama3-70b-8192', 'LLaMA 3 70B'),
-            ('mixtral-8x7b-32768', 'Mixtral 8x7B'),
+            ('deepseek-r1-distill-llama-70b', 'Deepseak'),
         ],
         label='Select Model'
     )

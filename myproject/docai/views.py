@@ -10,10 +10,19 @@ from langchain_groq import ChatGroq
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
+from .models import*
+from django.contrib.auth.models import User
+from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.shortcuts import redirect
+import re
+
+
 
 embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
 vector_store = None
-
+def index(request):
+    return render(request, 'index.html')
 def load_pdf_and_create_vector_store(file_path):
     global vector_store
     loader = PyPDFLoader(file_path)
@@ -36,6 +45,8 @@ def clear_previous_pdf_and_vector_store():
             os.remove(os.path.join(vector_store_path, file))
         os.rmdir(vector_store_path)
 
+
+
 def home(request):
     global vector_store
     pdf_form = PDFForm()
@@ -56,6 +67,7 @@ def home(request):
                 load_pdf_and_create_vector_store(pdf_path)
                 request.session['chat_history'].append({'type': 'message', 'content': 'New PDF uploaded successfully!'})
                 request.session.modified = True
+                print(os.getcwd())
             else:
                 request.session['chat_history'].append({'type': 'error', 'content': 'PDF upload failed. Please upload a valid PDF file.'})
                 request.session.modified = True
@@ -68,7 +80,9 @@ def home(request):
                     request.session['chat_history'].append({'type': 'error', 'content': 'Please enter a question to get an answer.'})
                 else:
                     request.session['chat_history'].append({'type': 'question', 'content': query})
+                    
                     groq_api_key = os.environ.get("GROQ_API_KEY")
+                    
                     if not groq_api_key:
                         request.session['chat_history'].append({'type': 'error', 'content': 'GROQ_API_KEY environment variable is not set.'})
                     else:
@@ -87,11 +101,16 @@ def home(request):
                                 que_chain = create_stuff_documents_chain(llm, prompt)
                                 rag_chain = create_retrieval_chain(retriever, que_chain)
                                 response = rag_chain.invoke({"input": query})
-                                answer = response['answer']
+                                answer1 = response['answer']
+                                answer =  re.sub(r"<think>.*?</think>", "",answer1, flags=re.DOTALL).strip()
+                               
                             else:
                                 prompt = ChatPromptTemplate.from_template("Question: {input}")
                                 response = llm.invoke(prompt.format(input=query))
-                                answer = response.content
+                                answer1 = response.content 
+                               
+                                answer =  re.sub(r"<think>.*?</think>", "",answer1, flags=re.DOTALL).strip()
+                               
                             request.session['chat_history'].append({'type': 'answer', 'content': answer})
                         except Exception as e:
                             request.session['chat_history'].append({'type': 'error', 'content': f'Error processing query: {str(e)}'})
@@ -101,11 +120,53 @@ def home(request):
                 request.session.modified = True
 
     # Debugging: Print the session to verify it's cleared
-    print("Chat history after request handling:", request.session.get('chat_history', []))
+    # print("Chat history after request handling:", request.session.get('chat_history', []))
 
     chat_history = request.session.get('chat_history', [])
     return render(request, 'home.html', {
         'pdf_form': pdf_form,
-        'query_form': query_form,
+        'query_form': QueryForm(),
         'chat_history': chat_history
     })
+def register(request):
+    if request.method == 'POST':
+        
+        username = request.POST.get('username')
+        first_name = request.POST.get('first_name')
+        last_name = request.POST.get('last_name')
+        password  = request.POST.get('password')
+        
+        user = User.objects.filter(username= username)
+        if user.exists():
+            messages.info(request, 'Username already exists')
+            return redirect('/register/')
+
+        user = User.objects.create(
+        username = username,
+        first_name = first_name,
+        last_name = last_name,
+        )
+        user.set_password(password)
+        user.save()
+        messages.info(request, 'account ceated succefully')
+
+    return render(request, 'register.html')
+
+def log_in(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        
+        user = authenticate(request, username=username, password=password)
+        
+        if user is not None:
+            login(request, user)
+            return redirect('home/')
+        else:
+            messages.error(request, "Invalid username or password")
+            return redirect('/')
+    else:
+        return render(request, 'login.html')
+
+
+

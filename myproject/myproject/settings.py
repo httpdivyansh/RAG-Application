@@ -135,4 +135,4 @@ USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-os.environ["GROQ_API_KEY"] = "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"
+os.environ["GROQ_API_KEY"] = "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"
